@@ -68,6 +68,12 @@ max-line-length = 160
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+include = [
+  "cockpitdecks_ext/decks/types/*.yaml",
+  "cockpitdecks_ext/decks/images/*.png",
+]
+
 [tool.hatch.version]
 path = "cockpitdecks_ext/__init__.py"
 
