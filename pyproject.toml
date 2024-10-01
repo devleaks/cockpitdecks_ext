@@ -40,9 +40,6 @@ Documentation = "https://devleaks.github.io/cockpitdecks-docs/"
 Issues = "https://github.com/devleaks/cockpitdecks_ext/issues"
 Source = "https://github.com/devleaks/cockpitdecks_ext"
 
-[project.scripts]
-cockpitdecks-cli = "cockpitdecks:start.main"
-
 # ###########################################
 #
 # Edit
