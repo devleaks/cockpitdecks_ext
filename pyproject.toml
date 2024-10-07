@@ -49,6 +49,8 @@ requires-python = ">=3.10"
 
 dependencies = [
     "cockpitdecks @ git+https://github.com/devleaks/cockpitdecks.git",
+    "cockpitdecks_sd @ git+https://github.com/devleaks/cockpitdecks_sd.git",
+    "cockpitdecks_ld @ git+https://github.com/devleaks/cockpitdecks_ld.git",
     "pillow~=10.4.0",
     "ruamel.yaml~=0.18.6",
 ]
