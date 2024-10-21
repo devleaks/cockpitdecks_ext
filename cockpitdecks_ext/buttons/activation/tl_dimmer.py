@@ -18,12 +18,20 @@ class LightDimmer(UpDown):
     def __init__(self, button: "Button"):
         UpDown.__init__(self, button=button)
         self.dimmer = self._config.get("dimmer", [10, 90])
+        self.deck_alt = self._config.get("deck")
         self.adjust_cockpit = self._config.get("adjust-cockpit", True)
 
     def activate(self, event):
         currval = self.stop_current_value
         if currval is not None and 0 <= currval < len(self.dimmer):
-            self.button.deck.set_brightness(self.dimmer[currval])
+            deck = self.button.deck
+            if self.deck_alt is not None:
+                deck = self.button.deck.cockpit.cockpit.get(self.deck_alt)
+                if deck is None:
+                    logger.warning(f"target deck {self.deck_alt} not found")
+                    return
+            deck.set_brightness(self.dimmer[currval])
+            # do it globally as well
             if self.adjust_cockpit:
                 self.button.deck.cockpit.adjust_light(brightness=int(self.dimmer[currval]) / 100)
         super().activate(event)
