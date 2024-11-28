@@ -78,7 +78,6 @@ class FMAIcon(DrawBase):
         DrawBase.__init__(self, button=button)
 
         self.fmaconfig = button._config.get("fma", {})  # should not be none, empty at most...
-        self.all_in_one = False
         self.fma_label_mode = self.fmaconfig.get("label-mode", FMA_LABEL_MODE)
         self.icon_color = (20, 20, 20)
         self.text = {k: FMA_EMPTY_LINE for k in FMA_DATAREFS}
