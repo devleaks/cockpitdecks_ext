@@ -1,4 +1,5 @@
 import logging
+import re
 
 from typing import Dict, Set
 
@@ -44,6 +45,7 @@ FMA_LABELS = {
     "APPR": "Approach",
     "AP": "Auto Pilot",
 }
+
 FMA_LABELS_ALT = {
     "ATHR": "Autothrust Mode",
     "VNAV": "Vertical Mode",
@@ -52,15 +54,100 @@ FMA_LABELS_ALT = {
     "AP": "Autopilot Mode",
 }
 
+# More or less ok for A320 series
+FMA_MESSAGES = [
+    "1TOGA",  # FMA 1 (THR)
+    "1FLX ([0-9]+) MCT",
+    "CLB",
+    "1IDLE ASYM",
+    "1A. FLOOR",
+    "1TOGA LK",
+    "1THR LK",
+    "1MAN TOGA",
+    "1MAN FLEX",
+    "1MAN MCT",
+    "1THR MCT",
+    "1THR CLB",
+    "1THR LVR",
+    "1THR SPEED",
+    "1THR IDLE",
+    "1SPEED",
+    "1MACH",
+    "1LVR CLB",
+    "1LVR MCT",
+    "1LVR ASYM",
+    "2SRS",  # FMA 2 (VNAV)
+    "2ALT",
+    "2ALT*",
+    "2ALT CRZ",
+    "2ALT CST",
+    "2V/S",
+    "2CLB",
+    "2DES",
+    "2OP CLB",
+    "2EXP CLB",
+    "2EXP DES",
+    "2G/S",
+    "2FINAL",
+    "2V/S ± ([0-9]+)",
+    "2FPA ± ([0-9]+).([0-9]+)",
+    "3RWY",  # FMA 3 (LNAV)
+    "3RWY TRK",
+    "3GA TRK",
+    "3TRACK",
+    "3HDG",
+    "3NAV",
+    "3LOC",
+    "3LOC*",
+    "3APP NAV",
+    "4CAT 1",  # FMA 4 (APPCH)
+    "4CAT 2",
+    "4CAT 3",
+    "4SINGLE",
+    "4CAT 3",
+    "4DUAL",
+    "4DH ([0-9]+)",
+    "4MDA ([0-9]+)",
+    "5AP 1",  # FMA 5 (MODE)
+    "5AP 2",
+    "5AP 1+2",
+    "51FD2",
+    "51FD",
+    "5FD2",
+    "51FD1",
+    "52FD2",
+    "52FD",
+    "5FD1",
+    "5A/THR",
+    "CLAND",  # COMBINED MODES
+    "CFLARE",
+    "CROLL",
+    "COUT",
+    "CFINAL",
+    "CAPP",
+    "MUSE MAN PITCH TRIM",  # FMA MESSAGES
+    "MMAN PITCH TRIM ONLY",
+    "MDECELERATE",
+    "MMORE DRAG",
+    "MVERTICAL DISCON AHEAD",
+    "MCHECK APP SEL",
+    "MSET GREEN DOT SPD",
+    "MSET HOLD SPEED",
+    "MMACH SEL .([0-9]+)",
+    "MSPEED SEL ([0-9]+)",
+]
+
 FMA_LABEL_MODE = 3  # 0 (None), 1 (keys), or 2 (values), or 3 alternates
 
 FMA_COUNT = len(FMA_LABELS.keys())
 FMA_LINES = len(set([c[0] for c in FMA_DATAREFS]))
-FMA_COLUMNS = [[0, 7], [7, 15], [15, 21], [21, 28], [28, 37]]
+# FMA_COLUMNS = [[0, 7], [7, 15], [15, 21], [21, 28], [28, 37]]
+FMA_COLUMNS = [[0, 7], [7, 15], [15, 21], [21, 29], [29, 37]]
 FMA_LINE_LENGTH = FMA_COLUMNS[-1][-1]
 FMA_EMPTY_LINE = " " * FMA_LINE_LENGTH
 COMBINED = "combined"
 WARNING = "warn"
+
 
 logger = logging.getLogger(__file__)
 # logger.setLevel(logging.DEBUG)
@@ -81,7 +168,6 @@ class FMAIcon(DrawBase):
         self.fma_label_mode = self.fmaconfig.get("label-mode", FMA_LABEL_MODE)
         self.icon_color = (20, 20, 20)
         self.text = {k: FMA_EMPTY_LINE for k in FMA_DATAREFS}
-        self.fma_text: Dict[str, str] = {}
         self.previous_text: Dict[str, str] = {}
         self.boxed: Set[str] = []
         self._cached = None  # cached icon
@@ -143,6 +229,32 @@ class FMAIcon(DrawBase):
         self.previous_text = self.text
         self.text = {k: self.button.get_simulator_data_value(v, default=FMA_EMPTY_LINE) for k, v in FMA_DATAREFS.items()}
         return self.text != self.previous_text
+
+    def is_fma_message(self, message: str, column: int = 0) -> bool:
+        # search with column
+        message = message.strip()
+        test = message
+        if 1 <= column <= 5:  # annunciators 1-5
+            test = f"{column}{message}"
+        elif column == 6:  # combined
+            test = f"C{message}"
+        elif column == 7:  # messages
+            test = f"M{message}"
+        if test in FMA_MESSAGES:
+            logger.debug(f"found {test}")
+            return True
+        # search without column
+        msgs = [m[1:] for m in FMA_MESSAGES]
+        if message in msgs:
+            logger.debug(f"found {message} ({column})")
+            return True
+        for test in filter(lambda m: "(" in m, FMA_MESSAGES):
+            pattern = re.compile(test)
+            if pattern.match(message):
+                logger.debug(f"{message} matches {test}")
+                return True
+        logger.warning(f"{message} ({column}) not found in FMA message list")
+        return False
 
     def check_boxed(self):
         """Check "boxed" datarefs to determine which texts are boxed/framed.
@@ -406,7 +518,12 @@ class FMAIcon(DrawBase):
                     currline = text[:2]
                     if (i == 1 or i == 2) and currline in ["3a", "3w"]:
                         wmsg = self.text[currline][FMA_COLUMNS[1][0] : FMA_COLUMNS[2][1]].strip()
-                        logger.debug(f"warning message '{wmsg}'")
+                        if i == 1:
+                            self.is_fma_message(wmsg, 6)
+                            logger.debug(f"combined message '{wmsg}'")
+                        else:
+                            self.is_fma_message(wmsg, 7)
+                            logger.debug(f"message '{wmsg}'")
                         draw.line(
                             (
                                 (2 * icon_width, 0),
@@ -432,6 +549,7 @@ class FMAIcon(DrawBase):
                 lat = loffset + w
                 if i == 1 and self.combined:
                     lat = lat + w
+                self.is_fma_message(text[2:], i + 1)
                 draw.text(
                     (lat, h),
                     text=text[2:],
@@ -486,3 +604,32 @@ class FMAIcon(DrawBase):
         #     logger.debug(f"button {self.button.name}: saved")
 
         return self._cached
+
+    def make_lines(self) -> list:
+        """Returns array of lines, each line is array of tuple (character, color).
+        [[("a", "g"), ("b", "w"), ...], [...]]
+        """
+        all_lines = []
+        for linenum in range(3):
+            line = {k: v for k, v in self.text.items() if int(k[0]) == (linenum + 1)}
+            thisline = []
+            for i in range(FMA_LINE_LENGTH):
+                car = None
+                color = None
+                carline = None
+                for k, l in line.items():
+                    l = l.ljust(FMA_LINE_LENGTH)
+                    c = l[i]
+                    if c != " ":
+                        if car is not None and car != " ":
+                            logger.warning(f"several lines with different characters ({i}, {car}, {color} vs {c} {k[1]}) / {carline} {l}")
+                        else:
+                            car = c
+                            color = k[1]
+                            carline = l
+                    else:
+                        if car is None:
+                            car = c
+                thisline.append((car, color))
+            all_lines.append(thisline)
+        return all_lines
