@@ -29,6 +29,11 @@ FMA_BOXES = [
     "AirbusFBW/FMAATHRboxing",
     "AirbusFBW/FMATHRWarning",
 ]
+FMA_OTHER_DATAREFS = [
+    "toliss_airbus/init/cruise_alt",
+#    "AirbusFBW/AltitudeTargetIsFL",
+    "toliss_airbus/pfdoutputs/general/ap_altitude_reference"
+]
 # Reproduction on Streamdeck touchscreen colors is difficult.
 FMA_COLORS = {
     "b": "#00EEFF",
@@ -71,6 +76,7 @@ FMA_MESSAGES = [
     "1THR LVR",
     "1THR SPEED",
     "1THR IDLE",
+    "1THR DES",  # A339
     "1SPEED",
     "1MACH",
     "1LVR CLB",
@@ -111,6 +117,9 @@ FMA_MESSAGES = [
     "5AP 1",  # FMA 5 (MODE)
     "5AP 2",
     "5AP 1+2",
+    # "5AP1",  # same, no space
+    # "5AP2",
+    # "5AP1+2",
     "51FD2",
     "51FD",
     "5FD2",
@@ -243,6 +252,12 @@ class FMAIcon(DrawBase):
         if test in FMA_MESSAGES:
             logger.debug(f"found {test}")
             return True
+        # search making abstraction of spaces, sometimes AP1 is "AP 1".
+        # Note: in this case, the vesrion to display might be nicer with space around...
+        for m in FMA_MESSAGES:
+            if test.replace(" ", "") == m.replace(" ", ""):
+                logger.debug(f"found {test} (no space)")
+                return True
         # search without column
         msgs = [m[1:] for m in FMA_MESSAGES]
         if message in msgs:
@@ -253,7 +268,7 @@ class FMAIcon(DrawBase):
             if pattern.match(message):
                 logger.debug(f"{message} matches {test}")
                 return True
-        logger.warning(f"{message} ({column}) not found in FMA message list")
+        logger.warning(f"{message} ({column}) not in FMA message list")
         return False
 
     def check_boxed(self):
@@ -294,56 +309,64 @@ class FMAIcon(DrawBase):
         self.boxed = set(boxed)
         logger.debug(f"boxed: {boxcode}, {self.boxed}")
 
+    def adjust_fma_texts(self):
+        init_alt = self.button.get_simulator_data_value("toliss_airbus/init/cruise_alt", default=-1)
+        fcu_alt = self.button.get_simulator_data_value("toliss_airbus/pfdoutputs/general/ap_altitude_reference", default=-2)
+        if init_alt == fcu_alt:
+            for line in ["1w", "2b"]:
+                text = self.text.get(line, "")
+                before = text
+                if text.strip() == "ALT":
+                    text = text.replace("ALT    ", "ALT CRZ")
+                    self.text[line] = text
+                    logger.debug(f"fma text modified: {line}: {before} -> {text}")
+
     def get_fma_lines(self, idx: int = -1):
-        if self.is_master_fma():
-            if idx == -1:
-                idx = self.fma_idx
-            s = FMA_COLUMNS[idx][0]  # idx * self.text_length
-            e = FMA_COLUMNS[idx][1]  # s + self.text_length
+        if not self.is_master_fma():
+            master_fma = self.get_master_fma()
+            if master_fma is not None:
+                return master_fma.get_fma_lines(idx=self.fma_idx)
+            logger.warning(f"button {self.button.name}: fma has no master, no lines")
+            return []
+
+        if idx == -1:
+            idx = self.fma_idx
+        s = FMA_COLUMNS[idx][0]  # idx * self.text_length
+        e = FMA_COLUMNS[idx][1]  # s + self.text_length
+        l = e - s
+        c = "1w"
+        empty = c + " " * l
+        if self.combined and idx == 1:
+            s = FMA_COLUMNS[idx][0]
+            e = FMA_COLUMNS[idx + 1][1]
             l = e - s
             c = "1w"
             empty = c + " " * l
-            if self.combined and idx == 1:
-                s = FMA_COLUMNS[idx][0]
-                e = FMA_COLUMNS[idx + 1][1]
-                l = e - s
-                c = "1w"
-                empty = c + " " * l
-            elif self.combined and idx == 2:
-                return set()
-            lines = []
-            for li in range(1, 4):  # Loop on lines
-                good = empty
-                for k, v in self.text.items():
-                    raws = {k: v for k, v in self.text.items() if int(k[0]) == li}
-                    for k, v in raws.items():
-                        # ERROR
-                        # ERROR
-                        # ERROR
-                        if type(v) is float:
-                            # logger.warning(f"{k}={v} is float ({raws})")
-                            continue
-                        # ERROR
-                        # ERROR
-                        # ERROR
-                        # normalize
-                        if len(v) < FMA_LINE_LENGTH:
-                            v = v + " " * (FMA_LINE_LENGTH - len(v))
-                        if len(v) > FMA_LINE_LENGTH:
-                            v = v[:FMA_LINE_LENGTH]
-                        # extract
-                        m = v[s:e]
-                        if len(m) != l:
-                            logger.warning(f"string '{m}' len {len(m)} has wrong size (should be {l})")
-                        if (c + m) != empty:  # if good == empty and
-                            good = str(li) + k[1] + m
-                            lines.append(good)
-            return set(lines)
-        master_fma = self.get_master_fma()
-        if master_fma is not None:
-            return master_fma.get_fma_lines(idx=self.fma_idx)
-        logger.warning(f"button {self.button.name}: fma has no master, no lines")
-        return []
+        elif self.combined and idx == 2:
+            return set()
+        lines = []
+        for li in range(1, 4):  # Loop on lines
+            good = empty
+            for k, v in self.text.items():
+                raws = {k: v for k, v in self.text.items() if int(k[0]) == li}
+                for k, v in raws.items():
+                    if type(v) is float:
+                        # logger.warning(f"{k}={v} is float ({raws})")
+                        continue
+                    # normalize
+                    if len(v) < FMA_LINE_LENGTH:
+                        v = v + " " * (FMA_LINE_LENGTH - len(v))
+                    if len(v) > FMA_LINE_LENGTH:
+                        v = v[:FMA_LINE_LENGTH]
+                    # extract
+                    m = v[s:e]
+                    if len(m) != l:
+                        logger.warning(f"string '{m}' len {len(m)} has wrong size (should be {l})")
+                    if (c + m) != empty:  # if good == empty and
+                        good = str(li) + k[1] + m
+                        lines.append(good)
+        self.adjust_fma_texts()
+        return set(lines)
 
     def get_image_for_icon_alt(self):
         """
