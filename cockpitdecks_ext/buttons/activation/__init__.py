@@ -1,1 +1,3 @@
-from .tl_dimmer import LightDimmer
+# Generic extensions
+#
+from .dimmer import LightDimmer

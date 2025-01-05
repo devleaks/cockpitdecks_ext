@@ -1,10 +1,7 @@
-# Cockpitdecks Decks
+# Cockpitdecks Extension
 
-This is the implementation files for
- - Stream Decks
- - Loupedeck
- - Berhinger X-Touch Mini
+This is a sample activation extension.
 
- These files are used by the Cockpitdecks application
- to implement phydsical decks connections.
+It provides a dimmer mechanism for decks that support
+backlight intensity setting.
  
