@@ -16,9 +16,7 @@ class LightDimmer(UpDown):
 
     REQUIRED_DECK_ACTIONS = [DECK_ACTIONS.PRESS, DECK_ACTIONS.LONGPRESS, DECK_ACTIONS.PUSH]
 
-    SCHEMA = UpDown.SCHEMA | {
-        "dimmer": {"type": "list", "schema": {"type": "integer"}, "meta": {"label": "Dataref"}}
-    }
+    SCHEMA = UpDown.SCHEMA | {"dimmer": {"type": "list", "schema": {"type": "integer"}, "meta": {"label": "Dataref"}}}
 
     def __init__(self, button: "Button"):
         UpDown.__init__(self, button=button)
